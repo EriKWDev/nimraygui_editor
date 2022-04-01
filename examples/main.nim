@@ -15,30 +15,16 @@ proc main() =
   let
     editor = newEditor("Editor 1")
     window1 = newEWindow("Window 1", rect(130, 30, 350, 620))
-    window2 = newEWindow("Window 2", rect(350, 50, 400, 170))
 
   var
-    testVector2 = vec2(0, 0)
-    testFloat = 20.0
+    testVector2 {.prop: window1.} = vec2(0, 0)
+    testFloat {.prop: window1.} = 20.0
+    background {.prop: window1.} = BLACK
+    circleColor {.prop: window1.} = RED
+    testVector3 {.prop: window1.} = vec3(0.0, 0.0, 0.0)
+    testBool {.prop: window1.} = false
 
-    background = BLACK
-    circleColor = RED
-
-    testVector3 = vec3(0.0, 0.0, 0.0)
-
-    testBool = false
-
-  window1.addProp newProp(testBool, "Draw FPS")
-  window1.addProp newProp(testVector2, "Position").withMinMax(vec2(-100, -100), vec2(500, 500))
-  window1.addProp newProp(testFloat, "Radius").withMinMax(0.001, 500.0)
-  window1.addProp newProp(testVector3)
-  window1.addProp newProp(circleColor, "Circle")
-  window1.addProp newProp(background, "Background")
   editor.addWindow window1
-
-  window2.addProp newProp(testVector2)
-  window2.addProp newProp(testFloat)
-  editor.addWindow window2
 
   while not windowShouldClose():
     updateEditor(editor)

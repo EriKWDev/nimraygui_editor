@@ -34,19 +34,13 @@ type
     data: PropData[T]
 
 
-template propTToPK(t: typedesc): PropertyKind =
-  when t is float: pkFloat
-  elif t is Vector3: pkVector3
-  elif t is Vector2: pkVector2
-  elif t is Color: pkColor
-  elif t is bool: pkBool
+template propTToPK[T](): PropertyKind =
+  when T is float: pkFloat
+  elif T is Vector3: pkVector3
+  elif T is Vector2: pkVector2
+  elif T is Color: pkColor
+  elif T is bool: pkBool
   else: pkNone
-
-func betterName(kind: PropertyKind, title: cstring = ""): cstring {.inline.} =
-  if title == "":
-    ($kind)[2..high($kind)].cstring
-  else:
-    title
 
 template withMinMax*[T](base: Prop[T], minV: T, maxV: T): Prop[T] =
   (
@@ -62,9 +56,9 @@ template withMinMax*[T](base: Prop[T], minV: T, maxV: T): Prop[T] =
 
 template newProp*[T](value: T, theName: cstring = ""): Prop[T] =
   (
-    propTToPK(typeof(value)),
+    propTToPK[T](),
     PropData[T](
-      name: betterName(propTToPK(typeof(value)), theName.cstring),
+      name: theName.cstring,
       hasMinMax: false,
       getValue: proc(): T = value,
       setValue: proc(v: T) = value = v
@@ -72,39 +66,21 @@ template newProp*[T](value: T, theName: cstring = ""): Prop[T] =
   )
 
 template addProp*[T](props: Properties, prop: Prop[T]) =
-  var id = -1
-
-  # This is here to give a compiel time error when I forget to
+  # This is here to give a compile-time error when I forget to
   # add a when clause for a type
   case prop.kind
   of pkFloat, pkVector3, pkVector2, pkColor, pkBool, pkNone: discard
 
-  when T is float:
-    id = len(props.floatData)
-    props.floatData.add(prop.data)
-    props.floatData[id].minMax = prop.data.minMax
+  template data: untyped =
+    when T is float: props.floatData
+    elif T is Vector3: props.vector3Data
+    elif T is Vector2: props.vector2Data
+    elif T is Color: props.colorData
+    elif T is bool: props.boolData
 
-  elif T is Vector3:
-    id = len(props.vector3Data)
-    props.vector3Data.add(prop.data)
-    props.vector3Data[id].minMax = prop.data.minMax
-
-  elif T is Vector2:
-    id = len(props.vector2Data)
-    props.vector2Data.add(prop.data)
-    props.vector2Data[id].minMax = prop.data.minMax
-
-  elif T is Color:
-    id = len(props.colorData)
-    props.colorData.add(prop.data)
-    props.colorData[id].minMax = prop.data.minMax
-
-  elif T is bool:
-    id = len(props.colorData)
-    props.boolData.add(prop.data)
-    props.boolData[id].minMax = prop.data.minMax
-
-  else: discard
+  let id = len(data)
+  data.add(prop.data)
+  data[id].minMax = prop.data.minMax
   props.kinds.add((prop.kind, id))
 
 proc drawProps*(props: Properties, tx, ty: float, bounds: Rectangle): float =
@@ -127,6 +103,12 @@ proc drawProps*(props: Properties, tx, ty: float, bounds: Rectangle): float =
     result = checkBox(rect(x, y, 20.0, 20.0), text, value)
     y += 20.0 + extra
 
+  template withIndent(dx: float, body) =
+    x += dx
+    block:
+      body
+    x -= dx
+
   proc drawFloat(value: float, minV: float, maxV: float, extra = 0.0, left: cstring = ""): float =
     let
       right = textFormat("%03.03f", value)
@@ -146,71 +128,64 @@ proc drawProps*(props: Properties, tx, ty: float, bounds: Rectangle): float =
       let data = props.floatData[id]
       drawBox(30.0, data.name)
 
-      x += 5.0
-      var (minV, maxV) = data.minMax
-      if not data.hasMinMax:
-        (minV, maxV) = (-100.0, 100.0)
+      withIndent 5.0:
+        var (minV, maxV) = data.minMax
+        if not data.hasMinMax:
+          (minV, maxV) = (-100.0, 100.0)
 
-      let
-        currentValue = data.getValue()
-        newValue = drawFloat(currentValue, minV, maxV)
-      data.setValue(newValue)
-      x -= 5.0
+        let
+          currentValue = data.getValue()
+          newValue = drawFloat(currentValue, minV, maxV)
+        data.setValue(newValue)
 
     of pkVector3:
       let data = props.vector3Data[id]
       drawBox(74.0, data.name)
 
-      x += 5.0
-      var (minV, maxV) = data.minMax
-      if not data.hasMinMax:
-        (minV, maxV) = (vec3(-100.0, -100.0, -100.0), vec3(100.0, 100.0, 100.0))
+      withIndent 5.0:
+        var (minV, maxV) = data.minMax
+        if not data.hasMinMax:
+          (minV, maxV) = (vec3(-100.0, -100.0, -100.0), vec3(100.0, 100.0, 100.0))
 
-      let
-        currentValue = data.getValue()
-        newValueX = drawFloat(currentValue.x, minV.x, maxV.x, 2.0, "x:")
-        newValueY = drawFloat(currentValue.y, minV.y, maxV.y, 2.0, "y:")
-        newValueZ = drawFloat(currentValue.z, minV.z, maxV.z, 0.0, "z:")
-      data.setValue(vec3(newValueX, newValueY, newValueZ))
-      x -= 5.0
+        let
+          currentValue = data.getValue()
+          newValueX = drawFloat(currentValue.x, minV.x, maxV.x, 2.0, "x:")
+          newValueY = drawFloat(currentValue.y, minV.y, maxV.y, 2.0, "y:")
+          newValueZ = drawFloat(currentValue.z, minV.z, maxV.z, 0.0, "z:")
+        data.setValue(vec3(newValueX, newValueY, newValueZ))
 
     of pkVector2:
       let data = props.vector2Data[id]
       drawBox(52.0, data.name)
 
-      x += 5.0
-      var (minV, maxV) = data.minMax
-      if not data.hasMinMax:
-        (minV, maxV) = (vec2(-100.0, -100.0), vec2(100.0, 100.0))
+      withIndent 5.0:
+        var (minV, maxV) = data.minMax
+        if not data.hasMinMax:
+          (minV, maxV) = (vec2(-100.0, -100.0), vec2(100.0, 100.0))
 
-      let
-        currentValue = data.getValue()
-        newValueX = drawFloat(currentValue.x, minV.x, maxV.x, 2.0, "x:")
-        newValueY = drawFloat(currentValue.y, minV.y, maxV.y, 0.0, "y:")
-      data.setValue(vec2(newValueX, newValueY))
-      x -= 5.0
+        let
+          currentValue = data.getValue()
+          newValueX = drawFloat(currentValue.x, minV.x, maxV.x, 2.0, "x:")
+          newValueY = drawFloat(currentValue.y, minV.y, maxV.y, 0.0, "y:")
+        data.setValue(vec2(newValueX, newValueY))
 
     of pkColor:
       let data = props.colorData[id]
       drawBox(160.0, data.name)
-      x += 5.0
-
-      let
-        currentValue = data.getValue()
-        newValue = drawColor(currentValue)
-      data.setValue(newValue)
-
-      x -= 5.0
+      withIndent 5.0:
+        let
+          currentValue = data.getValue()
+          newValue = drawColor(currentValue)
+        data.setValue(newValue)
 
     of pkBool:
       let data = props.boolData[id]
       drawBox(30.0, data.name)
-      x += 5.0
-      let
-        currentValue = data.getValue()
-        newValue = drawBool(currentValue)
-      data.setValue(newValue)
-      x -= 5.0
+      withIndent 5.0:
+        let
+          currentValue = data.getValue()
+          newValue = drawBool(currentValue)
+        data.setValue(newValue)
 
     of pkNone: discard
 
@@ -219,12 +194,13 @@ proc drawProps*(props: Properties, tx, ty: float, bounds: Rectangle): float =
   return y - ty
 
 macro prop*(properties, propVarNode) =
-  echo treeRepr(propVarNode)
   propVarNode.expectKind(nnkVarSection)
 
   result = newStmtList()
 
   for identDef in propVarNode:
+    echo treeRepr(identDef)
+
     let
       tmp = identDef.children.toSeq()
       (varName, _, def) = (tmp[0], tmp[1], tmp[2])
@@ -467,6 +443,8 @@ when isMainModule:
 
     background = BLACK
     circleColor = RED
+
+    testProp {.prop: window1.} = vec3(0, 0, 0)
 
   window1.addProp newProp(testVector2, "Position").withMinMax(vec2(-100, -100), vec2(500, 500))
   window1.addProp newProp(testFloat, "Radius").withMinMax(0.001, 500.0)
