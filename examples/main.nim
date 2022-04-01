@@ -14,8 +14,8 @@ proc main() =
 
   let
     editor = newEditor("Editor 1")
-    window2 = newEWindow("Window 2", rect(50, 50, 400, 170))
-    window1 = newEWindow("Window 1", rect(30, 30, 300, 570))
+    window1 = newEWindow("Window 1", rect(130, 30, 350, 620))
+    window2 = newEWindow("Window 2", rect(350, 50, 400, 170))
 
   var
     testVector2 = vec2(0, 0)
@@ -26,6 +26,9 @@ proc main() =
 
     testVector3 = vec3(0.0, 0.0, 0.0)
 
+    testBool = false
+
+  window1.addProp newProp(testBool, "Draw FPS")
   window1.addProp newProp(testVector2, "Position").withMinMax(vec2(-100, -100), vec2(500, 500))
   window1.addProp newProp(testFloat, "Radius").withMinMax(0.001, 500.0)
   window1.addProp newProp(testVector3)
@@ -48,7 +51,8 @@ proc main() =
           editor.enabled = not editor.enabled
 
         drawCircleV(testVector2 + vec2(100.0, 100.0), testFloat, circleColor)
-        drawFPS 10, 10
+        if testBool:
+          drawFPS 10, 10
 
   closeWindow()
 

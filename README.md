@@ -10,7 +10,7 @@ This is a thin layer around `raygui` to easily create windows with variables tha
 - [X] Color
 - [X] float
 - [ ] int
-- [ ] bool
+- [X] bool
 
 - [ ] seq
 - [ ] array

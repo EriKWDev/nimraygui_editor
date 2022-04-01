@@ -10,7 +10,7 @@ from nimraylib_now/rlgl import translatef, pushMatrix, popMatrix
 
 type
   PropertyKind* = enum
-    pkNone, pkFloat, pkVector2, pkVector3, pkColor
+    pkNone, pkFloat, pkVector2, pkVector3, pkColor, pkBool
 
   PropData*[T] = object
     name: cstring
@@ -27,6 +27,7 @@ type
     vector3Data*: seq[PropData[Vector3]]
     vector2Data*: seq[PropData[Vector2]]
     colorData*: seq[PropData[Color]]
+    boolData*: seq[PropData[bool]]
 
   Prop*[T] = tuple
     kind: PropertyKind
@@ -38,6 +39,7 @@ template propTToPK(t: typedesc): PropertyKind =
   elif t is Vector3: pkVector3
   elif t is Vector2: pkVector2
   elif t is Color: pkColor
+  elif t is bool: pkBool
   else: pkNone
 
 func betterName(kind: PropertyKind, title: cstring = ""): cstring {.inline.} =
@@ -75,7 +77,7 @@ template addProp*[T](props: Properties, prop: Prop[T]) =
   # This is here to give a compiel time error when I forget to
   # add a when clause for a type
   case prop.kind
-  of pkFloat, pkVector3, pkVector2, pkColor, pkNone: discard
+  of pkFloat, pkVector3, pkVector2, pkColor, pkBool, pkNone: discard
 
   when T is float:
     id = len(props.floatData)
@@ -97,6 +99,11 @@ template addProp*[T](props: Properties, prop: Prop[T]) =
     props.colorData.add(prop.data)
     props.colorData[id].minMax = prop.data.minMax
 
+  elif T is bool:
+    id = len(props.colorData)
+    props.boolData.add(prop.data)
+    props.boolData[id].minMax = prop.data.minMax
+
   else: discard
   props.kinds.add((prop.kind, id))
 
@@ -112,6 +119,13 @@ proc drawProps*(props: Properties, tx, ty: float, bounds: Rectangle): float =
   proc drawColor(value: Color): Color =
     result = colorPicker(rect(x, y, bounds.width - 50.0, 150.0), value)
     y += 150.0
+
+  proc drawBool(value: bool, extra = 0.0): bool =
+    let text = block:
+      if value: "true".cstring else: "false".cstring
+
+    result = checkBox(rect(x, y, 20.0, 20.0), text, value)
+    y += 20.0 + extra
 
   proc drawFloat(value: float, minV: float, maxV: float, extra = 0.0, left: cstring = ""): float =
     let
@@ -142,7 +156,6 @@ proc drawProps*(props: Properties, tx, ty: float, bounds: Rectangle): float =
         newValue = drawFloat(currentValue, minV, maxV)
       data.setValue(newValue)
       x -= 5.0
-      y += 15.0
 
     of pkVector3:
       let data = props.vector3Data[id]
@@ -160,7 +173,6 @@ proc drawProps*(props: Properties, tx, ty: float, bounds: Rectangle): float =
         newValueZ = drawFloat(currentValue.z, minV.z, maxV.z, 0.0, "z:")
       data.setValue(vec3(newValueX, newValueY, newValueZ))
       x -= 5.0
-      y += 15.0
 
     of pkVector2:
       let data = props.vector2Data[id]
@@ -177,7 +189,6 @@ proc drawProps*(props: Properties, tx, ty: float, bounds: Rectangle): float =
         newValueY = drawFloat(currentValue.y, minV.y, maxV.y, 0.0, "y:")
       data.setValue(vec2(newValueX, newValueY))
       x -= 5.0
-      y += 15.0
 
     of pkColor:
       let data = props.colorData[id]
@@ -190,9 +201,20 @@ proc drawProps*(props: Properties, tx, ty: float, bounds: Rectangle): float =
       data.setValue(newValue)
 
       x -= 5.0
-      y += 15.0
+
+    of pkBool:
+      let data = props.boolData[id]
+      drawBox(30.0, data.name)
+      x += 5.0
+      let
+        currentValue = data.getValue()
+        newValue = drawBool(currentValue)
+      data.setValue(newValue)
+      x -= 5.0
 
     of pkNone: discard
+
+    y += 15.0
 
   return y - ty
 
@@ -410,12 +432,16 @@ proc drawEditor*(editor: Editor) =
     let
       title = sortedByName[i].title
       w = measureText(title, 15).toFloat()
-      bw = 10.0
-      pressed = checkBox(rect(x + 3.0, 2.0, bw, 25 - 4.0), title, sortedByName[i].enabled)
+      state = if sortedByName[i].enabled: STATE_PRESSED else: STATE_NORMAL
 
-    x += w + bw
+    var pressed = false
+    withState state:
+      pressed = button(rect(x, 0.0, w, 25), title)
 
-    sortedByName[i].enabled = pressed
+    x += w
+
+    if pressed:
+      sortedByName[i].enabled = not sortedByName[i].enabled
 
 template beginEditor*(editor: Editor, body) =
   pushMatrix()
