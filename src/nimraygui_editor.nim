@@ -10,7 +10,7 @@ from nimraylib_now/rlgl import translatef, pushMatrix, popMatrix
 
 type
   PropertyKind* = enum
-    pkNone, pkFloat, pkVector2, pkVector3, pkColor, pkBool
+    pkNone, pkFloat, pkInt, pkVector2, pkVector3, pkColor, pkBool
 
   PropData*[T] = object
     name: cstring
@@ -24,6 +24,7 @@ type
     kinds*: seq[(PropertyKind, int)]
 
     floatData*: seq[PropData[float]]
+    intData*: seq[PropData[int]]
     vector3Data*: seq[PropData[Vector3]]
     vector2Data*: seq[PropData[Vector2]]
     colorData*: seq[PropData[Color]]
@@ -36,6 +37,7 @@ type
 
 template propTToPK[T](): PropertyKind =
   when T is float: pkFloat
+  elif T is int: pkInt
   elif T is Vector3: pkVector3
   elif T is Vector2: pkVector2
   elif T is Color: pkColor
@@ -69,10 +71,11 @@ template addProp*[T](props: Properties, prop: Prop[T]) =
   # This is here to give a compile-time error when I forget to
   # add a when clause for a type
   case prop.kind
-  of pkFloat, pkVector3, pkVector2, pkColor, pkBool, pkNone: discard
+  of pkFloat, pkInt, pkVector3, pkVector2, pkColor, pkBool, pkNone: discard
 
   template data: untyped =
     when T is float: props.floatData
+    elif T is int: props.intData
     elif T is Vector3: props.vector3Data
     elif T is Vector2: props.vector2Data
     elif T is Color: props.colorData
@@ -138,6 +141,20 @@ proc drawProps*(props: Properties, tx, ty: float, bounds: Rectangle): float =
           newValue = drawFloat(currentValue, minV, maxV)
         data.setValue(newValue)
 
+    of pkInt:
+      let data = props.intData[id]
+      drawBox(30.0, data.name)
+
+      withIndent 5.0:
+        var (minV, maxV) = data.minMax
+        if not data.hasMinMax:
+          (minV, maxV) = (-100, 100)
+
+        let
+          currentValue = data.getValue()
+          newValue = drawFloat(currentValue.toFloat(), minV.toFloat(), maxV.toFloat()).toInt()
+        data.setValue(newValue)
+
     of pkVector3:
       let data = props.vector3Data[id]
       drawBox(74.0, data.name)
@@ -189,7 +206,7 @@ proc drawProps*(props: Properties, tx, ty: float, bounds: Rectangle): float =
 
     of pkNone: discard
 
-    y += 15.0
+    y += 18.0
 
   return y - ty
 
