@@ -387,6 +387,7 @@ func newEditor*(title: cstring): Editor =
 
   if fileExists("theme.txt.rgs"):
     loadStyle("theme.txt.rgs")
+    setFont(getFontDefault())
 
 func updateEditor*(editor: Editor) =
   if not editor.enabled: return
