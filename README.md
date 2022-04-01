@@ -9,7 +9,7 @@ This is a thin layer around `raygui` to easily create windows with variables tha
 - [X] Vector2
 - [X] Color
 - [X] float
-- [ ] int
+- [X] int
 - [X] bool
 
 - [ ] seq
