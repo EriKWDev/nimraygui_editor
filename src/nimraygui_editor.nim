@@ -1,34 +1,225 @@
+import std/[algorithm, macros, sequtils, strformat]
+
+import nimraygui_editorpkg/[utils]
 
 import nimraylib_now
 import nimraylib_now/raygui
-
 from nimraylib_now/rlgl import translatef, pushMatrix, popMatrix
 
-import std/[algorithm, sequtils]
+# Properties
 
 type
-  EditorProperty*[T] = object
-    getValue: proc(): T
-    setValue: proc(v: T)
-    minMax: (T, T)
+  PropertyKind* = enum
+    pkNone, pkFloat, pkVector2, pkVector3, pkColor
 
-  EditorEntryKind* = enum
-    eekFloat, eekVector2, eekVector3, eekColor
-
-  EditorEntry* = object
+  PropData*[T] = object
     name: cstring
-    collapsed: bool
 
-    case kind: EditorEntryKind
-    of eekFloat:    floatProperty: EditorProperty[float]
-    of eekVector2:  vector2Property: EditorProperty[Vector2]
-    of eekVector3:  vector3Property: EditorProperty[Vector3]
-    of eekColor:    colorProperty: EditorProperty[Color]
+    getValue*: proc(): T
+    setValue*: proc(v: T)
+    minMax*: (T, T)
+    hasMinMax*: bool
 
+  Properties* = ref object
+    kinds*: seq[(PropertyKind, int)]
+
+    floatData*: seq[PropData[float]]
+    vector3Data*: seq[PropData[Vector3]]
+    vector2Data*: seq[PropData[Vector2]]
+    colorData*: seq[PropData[Color]]
+
+  Prop*[T] = tuple
+    kind: PropertyKind
+    data: PropData[T]
+
+
+template propTToPK(t: typedesc): PropertyKind =
+  when t is float: pkFloat
+  elif t is Vector3: pkVector3
+  elif t is Vector2: pkVector2
+  elif t is Color: pkColor
+  else: pkNone
+
+func betterName(kind: PropertyKind, title: cstring = ""): cstring {.inline.} =
+  if title == "":
+    ($kind)[2..high($kind)].cstring
+  else:
+    title
+
+template withMinMax*[T](base: Prop[T], minV: T, maxV: T): Prop[T] =
+  (
+    base.kind,
+    PropData[T](
+      name: base.data.name,
+      getValue: base.data.getValue,
+      setValue: base.data.setValue,
+      hasMinMax: true,
+      minMax: (minV, maxV)
+    )
+  )
+
+template newProp*[T](value: T, theName: cstring = ""): Prop[T] =
+  (
+    propTToPK(typeof(value)),
+    PropData[T](
+      name: betterName(propTToPK(typeof(value)), theName.cstring),
+      hasMinMax: false,
+      getValue: proc(): T = value,
+      setValue: proc(v: T) = value = v
+    )
+  )
+
+template addProp*[T](props: Properties, prop: Prop[T]) =
+  var id = -1
+
+  # This is here to give a compiel time error when I forget to
+  # add a when clause for a type
+  case prop.kind
+  of pkFloat, pkVector3, pkVector2, pkColor, pkNone: discard
+
+  when T is float:
+    id = len(props.floatData)
+    props.floatData.add(prop.data)
+    props.floatData[id].minMax = prop.data.minMax
+
+  elif T is Vector3:
+    id = len(props.vector3Data)
+    props.vector3Data.add(prop.data)
+    props.vector3Data[id].minMax = prop.data.minMax
+
+  elif T is Vector2:
+    id = len(props.vector2Data)
+    props.vector2Data.add(prop.data)
+    props.vector2Data[id].minMax = prop.data.minMax
+
+  elif T is Color:
+    id = len(props.colorData)
+    props.colorData.add(prop.data)
+    props.colorData[id].minMax = prop.data.minMax
+
+  else: discard
+  props.kinds.add((prop.kind, id))
+
+proc drawProps*(props: Properties, tx, ty: float, bounds: Rectangle): float =
+  var
+    x = tx
+    y = ty
+
+  proc drawBox(h: float, title: cstring = "") =
+    groupBox(rect(x, y, bounds.width - 10.0, h), title)
+    y += 5.0
+
+  proc drawColor(value: Color): Color =
+    result = colorPicker(rect(x, y, bounds.width - 50.0, 150.0), value)
+    y += 150.0
+
+  proc drawFloat(value: float, minV: float, maxV: float, extra = 0.0, left: cstring = ""): float =
+    let
+      right = textFormat("%03.03f", value)
+      realBounds = block:
+        if left == "":
+          rect(x, y, bounds.width - 60.0, 20.0)
+        else:
+          let d = measureText(left, 16).toFloat() + 5.0
+          rect(x + d, y, bounds.width - 60.0 - d, 20.0)
+
+    result = slider(realBounds, left, right, value, minV, maxV)
+    y += 20.0 + extra
+
+  for (kind, id) in props.kinds:
+    case kind
+    of pkFloat:
+      let data = props.floatData[id]
+      drawBox(30.0, data.name)
+
+      x += 5.0
+      var (minV, maxV) = data.minMax
+      if not data.hasMinMax:
+        (minV, maxV) = (-100.0, 100.0)
+
+      let
+        currentValue = data.getValue()
+        newValue = drawFloat(currentValue, minV, maxV)
+      data.setValue(newValue)
+      x -= 5.0
+      y += 15.0
+
+    of pkVector3:
+      let data = props.vector3Data[id]
+      drawBox(74.0, data.name)
+
+      x += 5.0
+      var (minV, maxV) = data.minMax
+      if not data.hasMinMax:
+        (minV, maxV) = (vec3(-100.0, -100.0, -100.0), vec3(100.0, 100.0, 100.0))
+
+      let
+        currentValue = data.getValue()
+        newValueX = drawFloat(currentValue.x, minV.x, maxV.x, 2.0, "x:")
+        newValueY = drawFloat(currentValue.y, minV.y, maxV.y, 2.0, "y:")
+        newValueZ = drawFloat(currentValue.z, minV.z, maxV.z, 0.0, "z:")
+      data.setValue(vec3(newValueX, newValueY, newValueZ))
+      x -= 5.0
+      y += 15.0
+
+    of pkVector2:
+      let data = props.vector2Data[id]
+      drawBox(52.0, data.name)
+
+      x += 5.0
+      var (minV, maxV) = data.minMax
+      if not data.hasMinMax:
+        (minV, maxV) = (vec2(-100.0, -100.0), vec2(100.0, 100.0))
+
+      let
+        currentValue = data.getValue()
+        newValueX = drawFloat(currentValue.x, minV.x, maxV.x, 2.0, "x:")
+        newValueY = drawFloat(currentValue.y, minV.y, maxV.y, 0.0, "y:")
+      data.setValue(vec2(newValueX, newValueY))
+      x -= 5.0
+      y += 15.0
+
+    of pkColor:
+      let data = props.colorData[id]
+      drawBox(160.0, data.name)
+      x += 5.0
+
+      let
+        currentValue = data.getValue()
+        newValue = drawColor(currentValue)
+      data.setValue(newValue)
+
+      x -= 5.0
+      y += 15.0
+
+    of pkNone: discard
+
+  return y - ty
+
+macro prop*(properties, propVarNode) =
+  echo treeRepr(propVarNode)
+  propVarNode.expectKind(nnkVarSection)
+
+  result = newStmtList()
+
+  for identDef in propVarNode:
+    let
+      tmp = identDef.children.toSeq()
+      (varName, _, def) = (tmp[0], tmp[1], tmp[2])
+      name = newLit($varName)
+
+    result.add quote do:
+      var `varName` = `def`
+      `properties`.addProp newProp(`varName`, $`name`)
+
+
+# Editor
+
+type
   EditorWindow* = ref object
     title*: cstring
     enabled*: bool
-    entries*: seq[EditorEntry]
+    props*: Properties
 
     bounds: Rectangle
     dragged: bool
@@ -45,65 +236,10 @@ type
 
     didDrag: bool
 
-func rect(x, y, w, h = 0.0): Rectangle {.inline.} = Rectangle(x: x, y: y, width: w, height: h)
-func rgba(r, g, b: uint8 = 0, a: uint8 = 255): Color {.inline.} = Color(r: r, g: g, b: b, a: a)
-func vec3(x, y, z = 0.0): Vector3 {.inline.} = Vector3(x: x, y: y, z: z)
-func vec2(x, y = 0.0): Vector2 {.inline.} = Vector2(x: x, y: y)
-func contains(rectangle: Rectangle, pos: Vector2): bool =
-  return pos.x >= rectangle.x and
-         pos.y >= rectangle.y and
-         pos.x <= rectangle.width + rectangle.x and
-         pos.y <= rectangle.height + rectangle.y
+template addProp*[T](window: EditorWindow, prop: Prop[T]) =
+  window.props.addProp(prop)
 
-
-const defaultSize = 100.0
-template defaultEntryVals[T](): (cstring, EditorEntryKind, (T, T)) =
-  when T is Vector3:
-    ("Vector3".cstring, eekVector3, (vec3(-1, -1, -1) * defaultSize, vec3(1, 1, 1) * defaultSize))
-  elif T is Vector2:
-    ("Vector2".cstring, eekVector2, (vec2(-1, -1) * defaultSize, vec2(1, 1) * defaultSize))
-  elif T is float:
-    ("Float".cstring, eekFloat, (-defaultSize, defaultSize))
-  elif T is Color:
-    ("Color".cstring, eekColor, (rgba(0, 0, 0, 0), rgba(255, 255, 255, 255)))
-
-template newEntry*[T](value: T, theName: cstring = "", theMinMax: (T, T)): EditorEntry =
-  let default = defaultEntryVals[T]()
-
-  var theResult = EditorEntry(
-    kind: default[1],
-    name: if theName == "": default[0] else: theName
-  )
-
-  let theProperty = EditorProperty[T](
-    getValue: proc(): T = value,
-    setValue: proc(v: T) = value = v,
-    minMax: theMinMax,
-  )
-
-  when T is float: theResult.floatProperty = theProperty
-  elif T is Vector2: theResult.vector2Property = theProperty
-  elif T is Vector3: theResult.vector3Property = theProperty
-  elif T is Color: theResult.colorProperty = theProperty
-
-  theResult
-
-template newEntry*[T](value: T, theName: cstring = ""): auto =
-  let default = defaultEntryVals[T]()
-  newEntry(value, theName, default[2])
-
-func addEntry*(window: EditorWindow, entry: EditorEntry) =
-  window.entries.add(entry)
-
-
-template withState(state: ControlState, body) =
-  let oldState = getState()
-  setState(state)
-  block:
-    body
-  setState(oldState)
-
-func newEWindow*(title: cstring, bounds: Rectangle): EditorWindow =
+proc newEWindow*(title: cstring, bounds: Rectangle): EditorWindow =
   new(result)
   result.title = title
   result.bounds = bounds
@@ -112,10 +248,10 @@ func newEWindow*(title: cstring, bounds: Rectangle): EditorWindow =
   result.dragged = false
   result.active = true
   result.lastPressed = getTime()
+  result.props = Properties.new()
 
 func addWindow*(editor: Editor, window: EditorWindow) =
   editor.windows.add(window)
-
 
 func updateEWindow*(editor: Editor, window: EditorWindow) =
   if not window.enabled: return
@@ -158,7 +294,6 @@ func updateEWindow*(editor: Editor, window: EditorWindow) =
           window.lastPressed = getTime()
           editor.didDrag = true
 
-
         # Resizing
         if window.resized:
           window.bounds.width += delta.x
@@ -178,73 +313,6 @@ func updateEWindow*(editor: Editor, window: EditorWindow) =
   window.bounds.width = max(window.bounds.width, measureText(window.title, 20).toFloat())
   window.bounds.height = max(window.bounds.height, 30.0)
 
-
-proc drawEntry(entry: EditorEntry, bounds: Rectangle): float =
-  var
-    x = bounds.x
-    y = bounds.y
-
-  proc drawBox(h: float): float =
-    groupBox(rect(x, y, bounds.width, h), entry.name)
-    return h + 10.0
-
-  proc drawFloat(currentValue: float, minV: float, maxV: float, extra = 0.0): float =
-    let theText = textFormat("%04.04f", currentValue)
-    result = slider(rect(x + 5.0, y, bounds.width - 55.0, 20.0), "", theText, currentValue, minV, maxV)
-    y += 20.0 + extra
-
-  proc drawColor(currentValue: Color, extra = 0.0): Color =
-    result = colorPicker(rect(x + 5.0, y, bounds.width - 55.0, 200.0), currentValue)
-    y += 200.0 + extra
-
-  case entry.kind
-
-  # Float
-  of eekFloat:
-    result = drawBox(30.0)
-    y += 5.0
-
-    let
-      currentValue = entry.floatProperty.getValue()
-      (minV, maxV) = entry.floatProperty.minMax
-      newValue = drawFloat(currentValue, minV, maxV)
-    entry.floatProperty.setValue(newValue)
-
-  # Vector2
-  of eekVector2:
-    result = drawBox(52.0)
-    y += 5.0
-
-    let
-      currentValue = entry.vector2Property.getValue()
-      (minV, maxV) = entry.vector2Property.minMax
-      newx = drawFloat(currentValue.x, minV.x, maxV.x, 2.0)
-      newy = drawFloat(currentValue.y, minV.y, maxV.y, 0.0)
-    entry.vector2Property.setValue(vec2(newx, newy))
-
-  # Vector3
-  of eekVector3:
-    result = drawBox(80.0)
-    y += 5.0
-
-    let
-      currentValue = entry.vector3Property.getValue()
-      (minV, maxV) = entry.vector3Property.minMax
-      newx = drawFloat(currentValue.x, minV.x, maxV.x, 2.0)
-      newy = drawFloat(currentValue.y, minV.y, maxV.y, 2.0)
-      newz = drawFloat(currentValue.z, minV.z, maxV.z, 0.0)
-    entry.vector3Property.setValue(vec3(newx, newy, newz))
-
-  # Color
-  of eekColor:
-    result = drawBox(210.0)
-    y += 5.0
-
-    let
-      currentValue = entry.colorProperty.getValue()
-      newValue = drawColor(currentValue)
-    entry.colorProperty.setValue(newValue)
-
 proc drawEWindow*(window: EditorWindow) =
   if not window.enabled: return
 
@@ -261,20 +329,23 @@ proc drawEWindow*(window: EditorWindow) =
     w = window.bounds.width - 5.0*2
     h = window.bounds.height - 25.0 - 5.0*2
 
-  beginScissorMode(window.bounds.x.toInt(), window.bounds.y.toInt() + 25, window.bounds.width.toInt(), window.bounds.height.toInt() - 25):
+  beginScissorMode(window.bounds.x.toInt(), window.bounds.y.toInt() + 25, window.bounds.width.toInt(),
+      window.bounds.height.toInt() - 25):
     var
       x = window.bounds.x + 5.0
       y = window.bounds.y + 8.0 + 25.0
 
     y -= window.scrollOffset.toFloat()
+    y += window.props.drawProps(x, y, window.bounds)
 
-    for i in 0 .. high(window.entries):
-      let th = drawEntry(window.entries[i], rect(x, y, w, h - y))
-      y += th
-
-    let v = y - window.bounds.y - 25.0
+    let v = max(y - window.bounds.y - 25.0, 0.0)
     if v > h or window.scrollOffset > 0:
-      window.scrollOffset = scrollBar(rect(window.bounds.x + window.bounds.width - 15.0, window.bounds.y + 25.0, 15.0, window.bounds.height - 25.0), window.scrollOffset, 0, max(v.toInt(), 0))
+      let scrollRect = rect(window.bounds.x + window.bounds.width - 15.0,
+                            window.bounds.y + 25.0,
+                            15.0,
+                            window.bounds.height - 25.0)
+
+      window.scrollOffset = scrollBar(scrollRect, window.scrollOffset, 0, v.toInt())
 
   let
     resizeSide = 10.0
@@ -285,7 +356,6 @@ proc drawEWindow*(window: EditorWindow) =
     )
 
   panel(resizeBounds)
-
 
 func newEditor*(title: cstring): Editor =
   new(result)
@@ -355,3 +425,25 @@ template beginEditor*(editor: Editor, body) =
     body
   popMatrix()
   drawEditor(editor)
+
+
+# Example
+
+when isMainModule:
+  let
+    window1 = newEWindow("Window 1", rect(30, 30, 300, 600))
+    # editor = newEditor("Editor 1")
+
+  var
+    testVector2 = vec2(0, 0)
+    testFloat = 20.0
+
+    background = BLACK
+    circleColor = RED
+
+  window1.addProp newProp(testVector2, "Position").withMinMax(vec2(-100, -100), vec2(500, 500))
+  window1.addProp newProp(testFloat, "Radius").withMinMax(0.001, 500.0)
+  window1.addProp newProp(circleColor, "Circle")
+  window1.addProp newProp(background, "Background")
+
+  # editor.addWindow window1
