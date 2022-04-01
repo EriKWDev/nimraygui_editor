@@ -4,27 +4,10 @@ A simple editor and "window manager" for nimraylib_now.
 The library depends on `nimraylib_now` which is a port of the amazing `raylib`.
 This is a thin layer around `raygui` to easily create windows with variables that are editable at runtime.
 
-# Currently Supported Types
-- [X] Vector3
-- [X] Vector2
-- [X] Color
-- [X] float
-- [X] int
-- [X] bool
-
-- [ ] seq
-- [ ] array
-- [ ] Tables
-
-# Future goals
-- [ ] Arbitrarily nested type editing such as tuples and objects
-- [ ] Data serialization and deserialization
-
 # Example
 ![demo.gif](./demo.gif)
 
 ```nim
-
 
 import nimraygui_editor
 import nimraylib_now
@@ -88,5 +71,23 @@ proc main() =
 when isMainModule:
   main()
 
-
 ```
+
+# Currently Supported Types
+- [X] Vector3
+- [X] Vector2
+- [X] Color
+- [X] float
+- [X] int
+- [X] bool
+
+- [ ] seq
+- [ ] array
+- [ ] Tables
+- [ ] Enums
+
+# Future goals
+- [ ] Arbitrarily nested type editing such as tuples and objects
+- [ ] Data serialization and deserialization
+  - [ ] Perhaps simple way to copy the code to set the variable as temporary workaround?
+- [ ] Dockable windows with tabs

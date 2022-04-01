@@ -1,4 +1,4 @@
-import std/[algorithm, macros, sequtils, strformat]
+import std/[algorithm, macros, sequtils]
 
 import nimraygui_editorpkg/[utils]
 
