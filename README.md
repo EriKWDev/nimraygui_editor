@@ -4,9 +4,28 @@ A simple editor and "window manager" for nimraylib_now.
 The library depends on `nimraylib_now` which is a port of the amazing `raylib`.
 This is a thin layer around `raygui` to easily create windows with variables that are editable at runtime.
 
+The package uses templates to encapsulate getter and setter methods for the variable you add using `addProp` to a window
+so that you don't have to write them manually. The editor can be toggled using `editor.toggleVisibility()`
+
+# Installation
+using nimble and git:
+```sh
+nimble install https://github.com/EriKWDev/nimraygui_editor
+```
+
+or, to run the example:
+```sh
+git clone git@github.com:EriKWDev/nimraygui_editor.git
+cd nimraygui_editor
+nimble develop
+nim r examples/main.nim
+```
+
 # Example
 ![demo.gif](./demo.gif)
 
+
+## The example's code
 ```nim
 
 import nimraygui_editor
@@ -19,21 +38,21 @@ template vec2*(tx, ty = 0.0): Vector2 = Vector2(x: tx, y: ty)
 
 proc main() =
   setConfigFlags(WINDOW_RESIZABLE or MSAA_4X_HINT)
-  initWindow(800, 700, "Nim Editor Example")
-  setTargetFPS 60
+  initWindow(950, 800, "Nim Editor Example")
+  setTargetFPS 0
 
   let
     editor = newEditor("Editor 1")
     window1 = newEWindow("Window 1, Props using pragma", rect(130, 30, 350, 670))
-    window2 = newEWindow("Window 2, Manual props with names", rect(240, 50, 350, 670))
+    window2 = newEWindow("Window 2, Manual props with names", rect(540, 50, 350, 670))
 
   # Properties can be added using the {.prop: <window>.} pragma...
   var
     testVector2 {.prop: window1.} = vec2(0, 0)
     testFloat {.prop: window1.} = 20.0
     intValue {.prop: window1.} = 42
-    background {.prop: window1.} = BLACK
-    circleColor {.prop: window1.} = RED
+    background {.prop: window1.} = BLUE
+    circleColor {.prop: window1.} = ORANGE
     testVector3 {.prop: window1.} = vec3(0.0, 0.0, 0.0)
     testBool {.prop: window1.} = false
 
@@ -52,14 +71,14 @@ proc main() =
   editor.addWindow window2
 
   while not windowShouldClose():
-    updateEditor(editor)
+    updateEditor(editor) # Update the editor as often as you like
 
     beginDrawing():
       clearBackground background
 
-      beginEditor(editor):
+      beginEditor(editor): # Begin drawing the editor. Can also call editor.drawEditor()
         if isKeyPressed(KeyboardKey.F10):
-          editor.enabled = not editor.enabled
+          editor.toggleVisibility() # editor.enabled = not editor.enabled
 
         drawCircleV(testVector2 + vec2(100.0, 100.0), testFloat, circleColor)
         if testBool:

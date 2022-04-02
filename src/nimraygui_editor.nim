@@ -119,7 +119,7 @@ proc drawProps*(props: Properties, tx, ty: float, bounds: Rectangle): float =
         if left == "":
           rect(x, y, bounds.width - 60.0, 20.0)
         else:
-          let d = measureText(left, 16).toFloat() + 5.0
+          let d = measureText(left, 14).toFloat() + 5.0
           rect(x + d, y, bounds.width - 60.0 - d, 20.0)
 
     result = slider(realBounds, left, right, value, minV, maxV)
@@ -212,12 +212,9 @@ proc drawProps*(props: Properties, tx, ty: float, bounds: Rectangle): float =
 
 macro prop*(properties, propVarNode) =
   propVarNode.expectKind(nnkVarSection)
-
   result = newStmtList()
 
   for identDef in propVarNode:
-    echo treeRepr(identDef)
-
     let
       tmp = identDef.children.toSeq()
       (varName, _, def) = (tmp[0], tmp[1], tmp[2])
@@ -250,6 +247,9 @@ type
     windows*: seq[EditorWindow]
 
     didDrag: bool
+
+proc toggleVisibility*(editor: Editor) =
+  editor.enabled = not editor.enabled
 
 template addProp*[T](window: EditorWindow, prop: Prop[T]) =
   window.props.addProp(prop)
@@ -325,7 +325,7 @@ func updateEWindow*(editor: Editor, window: EditorWindow) =
   window.bounds.y = max(window.bounds.y, 25.0)
   window.bounds.x = min(window.bounds.x, (getScreenWidth() - 25).toFloat())
   window.bounds.y = min(window.bounds.y, (getScreenHeight() - 25).toFloat())
-  window.bounds.width = max(window.bounds.width, measureText(window.title, 20).toFloat())
+  window.bounds.width = max(window.bounds.width, measureText(window.title, 14).toFloat())
   window.bounds.height = max(window.bounds.height, 30.0)
 
 proc drawEWindow*(window: EditorWindow) =
@@ -404,14 +404,18 @@ proc drawEditor*(editor: Editor) =
     lock()
     if i == high(editor.windows):
       unlock()
+
+    if editor.windows[i].dragged or editor.windows[i].resized:
+      lock()
     drawEWindow(editor.windows[i])
+    unlock()
 
   let sortedByName = editor.windows.sortedByIt(it.title)
   panel(rect(0, 0, getScreenWidth().toFloat(), 25))
 
   var
     initial = editor.windows.anyIt(it.enabled)
-    x = measureText(editor.title, 15).toFloat()
+    x = measureText(editor.title, 14).toFloat()
 
   var pressedEditor = false
   let state = if initial: STATE_PRESSED else: STATE_NORMAL
@@ -425,7 +429,7 @@ proc drawEditor*(editor: Editor) =
   for i in 0 .. high(sortedByName):
     let
       title = sortedByName[i].title
-      w = measureText(title, 15).toFloat()
+      w = measureText(title, 14).toFloat()
       state = if sortedByName[i].enabled: STATE_PRESSED else: STATE_NORMAL
 
     var pressed = false
