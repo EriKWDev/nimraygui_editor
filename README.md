@@ -110,3 +110,6 @@ when isMainModule:
 - [ ] Data serialization and deserialization
   - [ ] Perhaps simple way to copy the code to set the variable as temporary workaround?
 - [ ] Dockable windows with tabs
+
+# License
+All code in this repository is released under the MIT license.
